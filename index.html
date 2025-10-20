@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Halaman Pengguna - (Debug)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
+        h1 { color: #333; }
+        #container { max-width: 640px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        video { width: 100%; border: 1px solid #ccc; background-color: #000; }
+        #status, #lokasi { margin-top: 15px; font-weight: bold; }
+        #status.connected { color: #28a745; }
+        #status.waiting { color: #dc3545; }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+    <div id="container">
+        <h1>Halaman Pengguna</h1>
+        <p>Akan mengirimkan data saat halaman admin dibuka.</p>
+        
+        <video id="local-video" autoplay muted playsinline></video>
+        
+        <div id="status" class="waiting">Status: Menunggu koneksi dari admin...</div>
+        <div id="lokasi">Lokasi: Menunggu izin...</div>
+    </div>
+
+    <script>
+        const PREDICTABLE_PEER_ID = 'layar-utama-pengguna-kamera-v3'; // ID baru untuk menghindari cache
+        const peer = new Peer(PREDICTABLE_PEER_ID);
+        
+        const localVideo = document.getElementById('local-video');
+        const statusDiv = document.getElementById('status');
+        const lokasiDiv = document.getElementById('lokasi');
+        
+        let localStream;
+        let dataConnection;
+
+        console.log("LOG PENGGUNA: Skrip dimulai.");
+
+        peer.on('open', (id) => {
+            console.log(`LOG PENGGUNA: Berhasil terdaftar di server PeerJS dengan ID: ${id}`);
+        });
+
+        async function start() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                console.log("LOG PENGGUNA: Akses kamera dan mikrofon berhasil didapatkan.");
+                localVideo.srcObject = localStream;
+
+                navigator.geolocation.watchPosition((position) => {
+                    const coords = { lat: position.coords.latitude, lon: position.coords.longitude };
+                    lokasiDiv.innerHTML = `Latitude: ${coords.lat.toFixed(5)}<br>Longitude: ${coords.lon.toFixed(5)}`;
+                    if (dataConnection && dataConnection.open) {
+                        dataConnection.send(coords);
+                    }
+                });
+
+                peer.on('connection', (conn) => {
+                    console.log(`LOG PENGGUNA: Koneksi data masuk dari ${conn.peer}`);
+                    dataConnection = conn;
+                    statusDiv.textContent = `Status: Admin terhubung!`;
+                    statusDiv.className = 'connected';
+                    
+                    conn.on('data', (data) => {
+                        console.log(`LOG PENGGUNA: Menerima data dari admin:`, data);
+                        if (data.command === 'call-me') {
+                            console.log(`LOG PENGGUNA: Menerima perintah 'call-me', akan menelepon admin di ${conn.peer}`);
+                            const call = peer.call(conn.peer, localStream);
+                            
+                            // Tambahkan penanganan jika panggilan berhasil terhubung
+                            call.on('stream', () => {
+                                // Event ini sebenarnya untuk menerima stream balik, tapi bisa kita gunakan sebagai tanda koneksi berhasil
+                                console.log("LOG PENGGUNA: Panggilan video tampaknya berhasil terhubung.");
+                            });
+                        }
+                    });
+
+                    conn.on('close', () => {
+                        console.log("LOG PENGGUNA: Koneksi data dengan admin ditutup.");
+                        statusDiv.textContent = 'Status: Koneksi dengan admin terputus.';
+                        statusDiv.className = 'waiting';
+                    });
+                });
+
+            } catch (err) {
+                console.error("LOG PENGGUNA: Gagal mendapatkan akses media!", err);
+                alert('Gagal mendapatkan akses kamera atau mikrofon.');
+            }
+        }
+        
+        start();
+
+        peer.on('error', (err) => {
+            console.error("LOG PENGGUNA: Terjadi error pada PeerJS!", err);
+        });
+    </script>
+</body>
+</html>
